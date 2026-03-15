@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trò chơi Khủng long T-Rex - Full Version</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f7f7f7;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+        }
+        #gameCanvas {
+            background-color: #fff;
+            border-bottom: 2px solid #535353;
+        }
+        .container {
+            text-align: center;
+            color: #535353;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Bấm SPACE hoặc MŨI TÊN LÊN để nhảy</h2>
+        <canvas id="gameCanvas" width="600" height="200"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // --- 1. KHỞI TẠO HÌNH ẢNH ---
+        const dinoImg = new Image();
+        dinoImg.src = 'https://i.imgur.com/K1Y4K0D.png'; // Sprite sheet khủng long
+
+        const cactusImg = new Image();
+        cactusImg.src = 'https://i.imgur.com/S8p38H7.png'; // Hình ảnh xương rồng
+
+        let score = 0;
+        let gameFrame = 0;
+        let gameOver = false;
+        let gameSpeed = 5;
+        let obstacles = [];
+
+        // --- 2. ĐỐI TƯỢNG KHỦNG LONG ---
+        const dino = {
+            x: 50,
+            y: 150,
+            width: 44,  // Chiều rộng 1 khung hình trên sprite sheet
+            height: 47, // Chiều cao khung hình
+            dy: 0,
+            jumpPower: -12,
+            gravity: 0.6,
+            grounded: true,
+            
+            draw: function() {
+                if (dinoImg.complete) {
+                    // Logic đổi khung hình (Animation): 
+                    // Nếu đang nhảy thì hiện khung hình đứng yên (0).
+                    // Nếu đang chạy thì đổi giữa khung hình 0 và khung hình 1 cứ mỗi 10 frame.
+                    let sx = 0;
+                    if (this.grounded) {
+                        sx = (gameFrame % 16 < 8) ? 44 : 0; 
+                    }
+                    
+                    ctx.drawImage(
+                        dinoImg, 
+                        sx, 0, 44, 47, // Cắt từ ảnh gốc
+                        this.x, this.y, this.width, this.height // Vẽ lên canvas
+                    );
+                } else {
+                    // Vẽ tạm khối nếu ảnh chưa tải xong
+                    ctx.fillStyle = "#535353";
+                    ctx.fillRect(this.x, this.y, this.width, this.height);
+                }
+            },
+            update: function() {
+                this.dy += this.gravity;
+                this.y += this.dy;
+
+                if (this.y + this.height >= 190) {
+                    this.y = 190 - this.height;
+                    this.dy = 0;
+                    this.grounded = true;
+                }
+            },
+            jump: function() {
+                if (this.grounded) {
+                    this.dy = this.jumpPower;
+                    this.grounded = false;
+                }
+            }
+        };
+
+        // --- 3. ĐỐI TƯỢNG VẬT CẢN ---
+        class Obstacle {
+            constructor() {
+                this.width = 25;
+                this.height = 40 + Math.random() * 10;
+                this.x = canvas.width;
+                this.y = 190 - this.height;
+            }
+            draw() {
+                if (cactusImg.complete) {
+                    ctx.drawImage(cactusImg, this.x, this.y, this.width, this.height);
+                } else {
+                    ctx.fillStyle = "#ff0000";
+                    ctx.fillRect(this.x, this.y, this.width, this.height);
+                }
+            }
+            update() {
+                this.x -= gameSpeed;
+            }
+        }
+
+        function handleObstacles() {
+            // Khoảng cách xuất hiện xương rồng ngẫu nhiên để tăng độ khó
+            if (gameFrame % 100 === 0) {
+                obstacles.push(new Obstacle());
+            }
+
+            for (let i = 0; i < obstacles.length; i++) {
+                obstacles[i].update();
+                obstacles[i].draw();
+
+                // Kiểm tra va chạm (Hitbox tinh chỉnh nhỏ hơn 5px để công bằng)
+                let p = 5; 
+                if (
+                    dino.x + p < obstacles[i].x + obstacles[i].width - p &&
+                    dino.x + dino.width - p > obstacles[i].x + p &&
+                    dino.y + p < obstacles[i].y + obstacles[i].height - p &&
+                    dino.y + dino.height - p > obstacles[i].y + p
+                ) {
+                    gameOver = true;
+                }
+
+                // Xóa vật cản khi ra khỏi màn hình
+                if (obstacles[i].x + obstacles[i].width < 0) {
+                    obstacles.splice(i, 1);
+                    i--;
+                    score++;
+                    // Tăng tốc độ mỗi khi đạt 10 điểm
+                    if (score % 10 === 0) gameSpeed += 10;
+                }
+            }
+        }
+
+        function drawScore() {
+            ctx.fillStyle = "#535353";
+            ctx.font = "20px 'Courier New'";
+            ctx.fillText("Score: " + score.toString().padStart(5, '0'), 450, 30);
+        }
+
+        function resetGame() {
+            obstacles = [];
+            score = 0;
+            gameFrame = 0;
+            gameSpeed = 5;
+            gameOver = false;
+            dino.y = 150;
+            dino.dy = 0;
+            animate();
+        }
+
+        function animate() {
+            if (gameOver) {
+                ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#535353";
+                ctx.font = "bold 30px 'Courier New'";
+                ctx.fillText("G A M E  O V E R", 160, 100);
+                ctx.font = "16px 'Courier New'";
+                ctx.fillText("Bấm SPACE để chơi lại", 195, 140);
+                return;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Vẽ mặt đất
+            ctx.beginPath();
+            ctx.moveTo(0, 190);
+            ctx.lineTo(canvas.width, 190);
+            ctx.strokeStyle = "#535353";
+            ctx.stroke();
+
+            dino.update();
+            dino.draw();
+            handleObstacles();
+            drawScore();
+
+            gameFrame++;
+            requestAnimationFrame(animate);
+        }
+
+        // Bắt sự kiện
+        window.addEventListener("keydown", function(e) {
+            if(["Space", "ArrowUp"].indexOf(e.code) > -1) e.preventDefault();
+            if (e.code === "Space" || e.code === "ArrowUp") {
+                if (gameOver) resetGame();
+                else dino.jump();
+            }
+        });
+
+        canvas.addEventListener("touchstart", function() {
+            if (gameOver) resetGame();
+            else dino.jump();
+        });
+
+        animate();
+    </script>
+</body>
+</html>
